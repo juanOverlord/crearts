@@ -23,6 +23,34 @@
     4. FINAL       → La pregunta importante: "¿Te gustaría tener una cita?"
                      El botón "No" huye, se encoge y hace crecer al "Sí"
     5. CELEBRACIÓN → Confeti de flores/corazones al aceptar
+    6. CORREO      → Al aceptar, las respuestas se envían solas por
+                     correo al dueño de la página (ver abajo)
+
+  ──────────────────────────────────────────────────────────────────────────
+  ENVÍO DE RESPUESTAS POR CORREO (FormSubmit)
+  ──────────────────────────────────────────────────────────────────────────
+  La página es estática (GitHub Pages no puede mandar correos), así
+  que usa FormSubmit, un servicio gratuito que recibe las respuestas
+  y las reenvía por correo. Está configurado en el script, busca
+  "var EMAIL_DESTINO" (sección 3.5):
+
+    EMAIL_DESTINO = juan_leo95@outlook.com   ★ PERSONALIZABLE ★
+
+  Para cambiarlo por el correo de otro cliente, edita SOLO ese valor
+  y vuelve a subir el archivo. No hay que tocar nada más.
+
+  ⚠ ACTIVACIÓN (una sola vez, obligatoria):
+  La PRIMERA vez que alguien completa la página, FormSubmit manda un
+  correo de activación a EMAIL_DESTINO. Hay que abrirlo y picarle al
+  botón de confirmar; hasta entonces las respuestas NO llegan.
+  Después de activar, cada vez que alguien diga que sí, las
+  respuestas llegan solas a ese correo con el asunto
+  "💌 ¡Dijo que sí! Respuestas de la invitación".
+  Consejo: haz tú mismo una prueba completa apenas lo actives.
+
+  El envío es silencioso y en segundo plano: si falla (sin internet,
+  servicio caído), la celebración se muestra igual y la experiencia
+  de la persona no se interrumpe.
 
   Incluye música ambiental OPCIONAL generada con Web Audio API
   (no necesita ningún archivo .mp3) que se activa con el botón
@@ -79,9 +107,15 @@
                                imagen con el mismo nombre, o cambia la
                                ruta en las etiquetas <img>
     7. FIRMA / MARCA         → busca "Hecho por Crearts3D" en el <footer>
+    8. CORREO DE RESPUESTAS  → busca "var EMAIL_DESTINO" en el bloque
+                               script y pon el correo del cliente;
+                               recuerda hacer la activación de
+                               FormSubmit (ver sección de correo arriba)
 
   Checklist por cliente antes de entregar:
     □ Cambiar preguntas y opciones en QUESTIONS
+    □ Cambiar EMAIL_DESTINO por el correo del cliente y completar la
+      activación de FormSubmit con una prueba real
     □ Cambiar imagen si el cliente quiere otro tema (no solo girasoles)
     □ Ajustar colores en :root si cambia el tema
     □ Revisar la pregunta final y el texto de celebración
@@ -648,7 +682,7 @@
            3.2 Navegación entre pantallas (showScreen)
            3.3 Render y avance del quiz (renderQuestion / pickOption)
            3.4 Botón "No" que huye (flee + listeners)
-           3.5 Aceptación y confeti (celebrate)
+           3.5 Aceptación, envío de respuestas por correo y confeti
            3.6 Música generada con Web Audio API
          ════════════════════════════════════════════════════════════════ */
       (function () {
@@ -724,9 +758,11 @@
 
         /* Estado del quiz:
            answers → guarda la etiqueta elegida en cada pregunta,
-                     en el mismo orden que QUESTIONS. Hoy solo vive
-                     en memoria (no se guarda ni se envía a ningún
-                     servidor: la página es 100% estática).
+                     en el mismo orden que QUESTIONS. Vive en memoria
+                     mientras dura el recorrido y, al aceptar la cita,
+                     se envía por correo con sendAnswers() (sección 3.5,
+                     vía FormSubmit). La página sigue siendo estática:
+                     no guarda nada en ningún servidor propio.
            current → índice de la pregunta visible (empieza en 0). */
         var answers = [];
         var current = 0;
@@ -939,16 +975,78 @@
         });
 
         /* ────────────────────────────────────────────────────────────
-           3.5 ACEPTACIÓN Y CONFETI
-           Al tocar "¡Sí!" se muestra la pantalla de celebración y se
-           dispara celebrate(): crea 42 piezas (emojis de flores,
-           corazones y brillos) en posiciones, tamaños, duraciones y
-           retrasos aleatorios, y limpia la capa a los 6.5 segundos.
+           3.5 ACEPTACIÓN, ENVÍO POR CORREO Y CONFETI
+           Al tocar "¡Sí!" pasan tres cosas:
+             1. Se muestra la pantalla de celebración
+             2. sendAnswers() envía las respuestas por correo
+             3. celebrate() dispara el confeti: crea 42 piezas (emojis
+                de flores, corazones y brillos) en posiciones, tamaños,
+                duraciones y retrasos aleatorios, y limpia la capa a
+                los 6.5 segundos.
            ★ PERSONALIZABLE ★ Cambia el arreglo `pieces` y `count`
            para otro tema (ej. solo corazones, o confeti de cumpleaños).
+
+           ── ENVÍO DE RESPUESTAS POR CORREO (FormSubmit) ──
+           ★ PERSONALIZABLE ★ EMAIL_DESTINO es el correo al que llegan
+           las respuestas. Para otro cliente, cambia SOLO este valor.
+
+           Cómo funciona: sendAnswers() arma un objeto con cada
+           pregunta y su respuesta elegida, más la respuesta final
+           ("¡Sí!") y la fecha/hora, y lo manda con fetch() en formato
+           JSON al endpoint AJAX de FormSubmit:
+             https://formsubmit.co/ajax/CORREO
+           FormSubmit lo convierte en un correo con tabla y lo entrega
+           a EMAIL_DESTINO. Los campos que empiezan con "_" son
+           opciones de FormSubmit, no respuestas:
+             _subject  → asunto del correo que llega
+             _template → "table" = correo en tabla pregunta/respuesta
+             _captcha  → "false" = sin captcha (el envío es por AJAX,
+                         la persona nunca ve una pantalla extra)
+
+           ⚠ ACTIVACIÓN: la primera vez que se envía, FormSubmit manda
+           un correo de confirmación a EMAIL_DESTINO y hay que picarle
+           "Activate" para que las respuestas empiecen a llegar.
+
+           El envío es en segundo plano y a prueba de fallos: va
+           envuelto en try/catch y con .catch() vacío a propósito, para
+           que si no hay internet o el servicio falla, la celebración
+           se vea igual. answersSent evita envíos duplicados si el
+           botón se toca más de una vez.
            ──────────────────────────────────────────────────────────── */
+        var EMAIL_DESTINO = "juan_leo95@outlook.com"; /* ★ PERSONALIZABLE ★ */
+        var answersSent = false;
+
+        function sendAnswers() {
+          if (answersSent) return;
+          answersSent = true;
+          var payload = {
+            _subject: "💌 ¡Dijo que sí! Respuestas de la invitación",
+            _template: "table",
+            _captcha: "false",
+            "Respuesta final": "¡Sí! 🌻 Aceptó la cita"
+          };
+          QUESTIONS.forEach(function (q, i) {
+            payload["Pregunta " + (i + 1) + ": " + q.text] = answers[i] || "(sin respuesta)";
+          });
+          payload["Fecha y hora"] = new Date().toLocaleString("es-MX", {
+            dateStyle: "full", timeStyle: "short"
+          });
+          try {
+            fetch("https://formsubmit.co/ajax/" + EMAIL_DESTINO, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+              },
+              body: JSON.stringify(payload),
+              keepalive: true
+            }).catch(function () { /* fallo silencioso: no interrumpir la celebración */ });
+          } catch (e) { /* navegadores muy viejos sin fetch: se ignora */ }
+        }
+
         btnSi.addEventListener("click", function () {
           showScreen("yes");
+          sendAnswers();
           celebrate();
         });
 
@@ -1074,5 +1172,8 @@
          el documento: ahí están todos los puntos de cambio por cliente.
          ════════════════════════════════════════════════════════════════ */
     </script>
+  </body>
+</html>
+
   </body>
 </html>
